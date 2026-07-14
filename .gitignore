@@ -1,0 +1,77 @@
+# Environment files
+.env
+.env.local
+.env.*
+!.env.example
+!.env.sample
+
+# Node / frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+.vite/
+**/.vite/
+coverage/
+**/coverage/
+.npm/
+.pnpm-store/
+yarn-error.log*
+npm-debug.log*
+pnpm-debug.log*
+
+# Python / backend
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+**/.venv/
+venv/
+**/venv/
+env/
+**/env/
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.pyre/
+**/.pyre/
+*.egg-info/
+**/*.egg-info/
+*.sqlite3
+**/*.sqlite3
+*.db
+**/*.db
+
+# Logs and temp files
+*.log
+logs/
+**/logs/
+tmp/
+**/tmp/
+temp/
+**/temp/
+*.swp
+*.swo
+*.tmp
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker / local runtime
+*.pid
+*.seed
+
+# Optional large/local assets
+uploads/
+**/uploads/
+media/
+**/media/
