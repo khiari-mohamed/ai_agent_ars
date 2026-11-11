@@ -75,3 +75,10 @@ uploads/
 **/uploads/
 media/
 **/media/
+models/
+backend/cloning_set/
+backend/tts_out/
+backend/tts_test.mp3
+backend/sentences.txt
+backend/stt_dump.jsonl
+backend/stt_clips.csv

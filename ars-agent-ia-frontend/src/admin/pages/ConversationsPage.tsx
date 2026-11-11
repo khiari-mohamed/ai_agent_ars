@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import ConversationTable from '../components/ConversationTable';
 import Pagination from '@/shared/components/Pagination';
@@ -10,7 +10,6 @@ import { useAsync } from '@/lib/hooks/useAsync';
 import { usePagination } from '@/lib/hooks/usePagination';
 import type { ConversationFilters, ConversationListItem } from '@/types/conversation';
 import { MessageSquare } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const INITIAL_FILTERS: ConversationFilters = {
   search: '',

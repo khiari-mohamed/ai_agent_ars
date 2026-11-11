@@ -1,55 +1,82 @@
 import { create } from 'zustand';
-import type { Message, ConversationStatus, SentimentLabel } from '@/types/conversation';
-import type { AuthState, AuthSession } from '@/types/auth';
+import type {
+  ClosedReason,
+  ConnectionState,
+  ConversationStatus,
+  Message,
+  SentimentLabel,
+} from '@/types/conversation';
+import { statusForClosedReason } from '@/lib/ws/protocol';
 
-interface ConversationStore {
+interface ConversationState {
   conversationId: string | null;
-  sessionId: string | null;
   messages: Message[];
-  status: ConversationStatus | 'IDLE';
-  authState: AuthState;
-  authSession: AuthSession | null;
+  status: 'IDLE' | ConversationStatus;
   isConnected: boolean;
+  connection: ConnectionState;
   isAgentTyping: boolean;
-  sentimentScore: number;
-  sentimentLabel: SentimentLabel;
+  sentimentScore: number | null;
+  sentimentLabel: SentimentLabel | null;
+  ticketId: string | null;
+  closedReason: ClosedReason | null;
 
-  // Actions
-  setConversationId: (id: string) => void;
-  setSessionId: (id: string) => void;
-  addMessage: (msg: Message) => void;
-  setStatus: (status: ConversationStatus | 'IDLE') => void;
-  setAuthState: (state: AuthState) => void;
-  setAuthSession: (session: AuthSession | null) => void;
-  setConnected: (v: boolean) => void;
-  setAgentTyping: (v: boolean) => void;
+  setConversationId: (id: string | null) => void;
+  addMessage: (message: Message) => void;
+  setStatus: (status: 'IDLE' | ConversationStatus) => void;
+  setConnected: (connected: boolean) => void;
+  setConnection: (connection: ConnectionState) => void;
+  setAgentTyping: (typing: boolean) => void;
   setSentiment: (score: number, label: SentimentLabel) => void;
+  setTicketId: (ticketId: string | null) => void;
+  finish: (reason: ClosedReason) => void;
   reset: () => void;
 }
 
 const initialState = {
   conversationId: null,
-  sessionId: null,
-  messages: [],
+  messages: [] as Message[],
   status: 'IDLE' as const,
-  authState: 'IDLE' as const,
-  authSession: null,
   isConnected: false,
+  connection: 'idle' as ConnectionState,
   isAgentTyping: false,
-  sentimentScore: 0,
-  sentimentLabel: 'NEUTRE' as const,
+  sentimentScore: null,
+  sentimentLabel: null,
+  ticketId: null,
+  closedReason: null,
 };
 
-export const useConversationStore = create<ConversationStore>()((set) => ({
+export const useConversationStore = create<ConversationState>((set) => ({
   ...initialState,
-  setConversationId: (id) => set({ conversationId: id }),
-  setSessionId: (id) => set({ sessionId: id }),
-  addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+
+  setConversationId: (conversationId) => set({ conversationId }),
+
+  addMessage: (message) =>
+    set((state) =>
+      state.messages.some((m) => m.id === message.id)
+        ? state
+        : { messages: [...state.messages, message] },
+    ),
+
   setStatus: (status) => set({ status }),
-  setAuthState: (authState) => set({ authState }),
-  setAuthSession: (authSession) => set({ authSession }),
+
   setConnected: (isConnected) => set({ isConnected }),
+
+  setConnection: (connection) => set({ connection, isConnected: connection === 'open' }),
+
   setAgentTyping: (isAgentTyping) => set({ isAgentTyping }),
+
   setSentiment: (sentimentScore, sentimentLabel) => set({ sentimentScore, sentimentLabel }),
-  reset: () => set(initialState),
+
+  setTicketId: (ticketId) => set({ ticketId }),
+
+  finish: (reason) =>
+    set({
+      status: statusForClosedReason(reason),
+      closedReason: reason,
+      connection: 'closed',
+      isConnected: false,
+      isAgentTyping: false,
+    }),
+
+  reset: () => set({ ...initialState, messages: [] }),
 }));

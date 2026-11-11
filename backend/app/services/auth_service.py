@@ -25,7 +25,10 @@ class AuthService:
         if user is None:
             auth_attempts.labels(result="failure").inc()
             # Timing-safe: still verify a dummy password to prevent user enumeration
-            verify_password("dummy", "$2b$12$dummy_hash_that_never_matches_any_password")
+            verify_password(
+                "dummy",
+                "$2b$12$mDKnDaDAVTymRRY2t9jzXu6MSVs7tG/EnPKnGJFLdmO2Udn9/meDG",
+            )
             raise AuthenticationError("Identifiants invalides")
 
         # Check lockout

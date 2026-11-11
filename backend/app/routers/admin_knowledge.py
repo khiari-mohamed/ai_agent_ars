@@ -1,132 +1,107 @@
 from __future__ import annotations
 
-import hashlib
-import io
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.knowledge_repo import KnowledgeRepository
 from app.db.session import get_db
-from app.routers.dependencies import get_current_user
-from app.models.db.user import User
+from app.models.schemas.knowledge import (
+    KnowledgeDocCreate,
+    KnowledgeDocOut,
+    KnowledgeSearchRequest,
+    KnowledgeSearchResponse,
+    Language,
+)
+from app.routers.dependencies import require_role
 from app.services.rag_service import RAGService
-from app.core.logging import get_logger
 
-logger = get_logger(__name__)
 router = APIRouter(prefix="/admin/knowledge", tags=["admin-knowledge"])
 
-ALLOWED_MIME_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
-
-@router.get("")
-async def list_documents(
+@router.get(
+    "",
+    response_model=list[KnowledgeDocOut],
+    dependencies=[Depends(require_role("ADMIN", "SUPERVISEUR", "AGENT"))],
+)
+async def list_knowledge_docs(
+    intent: str | None = None,
+    language: Language | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-) -> list[dict]:  # type: ignore[type-arg]
-    repo = KnowledgeRepository(db)
-    docs = await repo.list_docs()
-    return [
-        {
-            "id": str(d.id),
-            "title": d.title,
-            "sourceUrl": d.source_url,
-            "status": d.status,
-            "chunkCount": d.chunk_count,
-            "uploadedAt": d.uploaded_at.isoformat(),
-        }
-        for d in docs
-    ]
+) -> list[KnowledgeDocOut]:
+    docs = await KnowledgeRepository(db).list_docs(
+        intent=intent, language=language, limit=limit, offset=offset
+    )
+    return [KnowledgeDocOut.model_validate(d) for d in docs]
 
 
-@router.post("/upload", status_code=status.HTTP_202_ACCEPTED)
-async def upload_document(
-    file: UploadFile = File(...),
+@router.post(
+    "",
+    response_model=KnowledgeDocOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("ADMIN", "SUPERVISEUR"))],
+)
+async def create_knowledge_doc(
+    payload: KnowledgeDocCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-) -> dict[str, str]:
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail={"message": "Format non supporté. Utilisez PDF ou DOCX."},
-        )
-
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail={"message": "Fichier trop volumineux (max 10 Mo)"},
-        )
-
-    file_hash = hashlib.sha256(content).hexdigest()
-    repo = KnowledgeRepository(db)
-
-    # Check for duplicates
-    existing = await repo.list_docs()
-    for doc in existing:
-        if doc.file_hash == file_hash:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"message": "Ce document a déjà été indexé"},
-            )
-
-    doc = await repo.create_doc(title=file.filename or "Document sans titre", file_hash=file_hash)
-    doc_id = str(doc.id)
+) -> KnowledgeDocOut:
+    """Adds (or, with an existing external_id, updates) a doc on the fly, e.g. a manual
+    correction by an ARS agent. Bulk loads go through scripts/ingest_rag_data.py."""
+    doc_id = await RAGService(db).ingest_document(
+        question=payload.question,
+        answer=payload.answer,
+        source=payload.source,
+        intent=payload.intent,
+        language=payload.language,
+        external_id=payload.external_id,
+        title=payload.title,
+        metadata=payload.metadata,
+    )
     await db.commit()
-
-    # Background indexing task
-    import asyncio
-    asyncio.create_task(_index_document(doc_id, content, file.content_type or "", file.filename or ""))
-
-    return {"doc_id": doc_id, "status": "INDEXING"}
+    doc = await KnowledgeRepository(db).get_doc(uuid.UUID(doc_id))
+    if doc is None:  # pragma: no cover - committed one line above
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Document non persisté")
+    return KnowledgeDocOut.model_validate(doc)
 
 
-async def _index_document(doc_id: str, content: bytes, content_type: str, filename: str) -> None:
-    """Background task: extract text, embed, store chunks."""
-    from app.db.session import AsyncSessionLocal
-    try:
-        # Extract text
-        text = ""
-        if "pdf" in content_type:
-            import pypdf
-            reader = pypdf.PdfReader(io.BytesIO(content))
-            text = "\n".join(p.extract_text() or "" for p in reader.pages)
-        else:
-            import docx as python_docx
-            doc = python_docx.Document(io.BytesIO(content))
-            text = "\n".join(p.text for p in doc.paragraphs)
-
-        if not text.strip():
-            raise ValueError("Empty document")
-
-        rag = RAGService()
-        chunks = await rag.index_document(doc_id, text, filename)
-
-        async with AsyncSessionLocal() as db:
-            repo = KnowledgeRepository(db)
-            await repo.add_chunks(uuid.UUID(doc_id), chunks)
-            await db.commit()
-
-        logger.info("document_indexed", doc_id=doc_id, chunks=len(chunks))
-    except Exception as exc:
-        logger.error("document_indexing_failed", doc_id=doc_id, error=str(exc))
-        from sqlalchemy import update
-        from app.models.db.knowledge_doc import KnowledgeDoc
-        async with AsyncSessionLocal() as db:
-            await db.execute(update(KnowledgeDoc).where(KnowledgeDoc.id == uuid.UUID(doc_id)).values(status="FAILED"))
-            await db.commit()
-
-
-@router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_document(
+@router.delete(
+    "/{doc_id}",
+    response_class=Response,
+    response_model=None,
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("ADMIN"))],
+)
+async def delete_knowledge_doc(
     doc_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-) -> None:
+) -> Response:
     repo = KnowledgeRepository(db)
+    if await repo.get_doc(doc_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document introuvable")
     await repo.delete_doc(doc_id)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/search",
+    response_model=KnowledgeSearchResponse,
+    dependencies=[Depends(require_role("ADMIN", "SUPERVISEUR", "AGENT"))],
+)
+async def search_knowledge(
+    payload: KnowledgeSearchRequest,
+    db: AsyncSession = Depends(get_db),
+) -> KnowledgeSearchResponse:
+    """Debug/QA endpoint: returns dense, lexical and fused scores for every hit. With
+    no `min_score`, nothing is filtered, so it can be used to calibrate RAG_MIN_SCORE."""
+    return await RAGService(db).search(
+        payload.query,
+        top_k=payload.top_k,
+        intent_filter=payload.intent_filter,
+        min_score=payload.min_score,
+        language=payload.language,
+        answerable_only=payload.answerable_only,
+    )

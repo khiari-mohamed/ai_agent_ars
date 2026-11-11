@@ -29,7 +29,7 @@ export default function Pagination({ page, totalPages, onNext, onPrev, onGoTo, c
       <button
         onClick={onPrev}
         disabled={page === 1}
-        className="p-2 rounded-lg hover:bg-surface-overlay disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 transition-colors"
+        className="p-2 rounded-lg hover:bg-white/60 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 transition-colors"
         aria-label="Page précédente"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -44,10 +44,10 @@ export default function Pagination({ page, totalPages, onNext, onPrev, onGoTo, c
             onClick={() => onGoTo(p)}
             aria-current={p === page ? 'page' : undefined}
             className={cn(
-              'h-8 w-8 rounded-lg text-sm font-medium transition-colors',
+              'h-8 w-8 rounded-lg text-sm font-medium transition-all duration-150',
               p === page
-                ? 'bg-[#d62121] text-white'
-                : 'hover:bg-surface-overlay text-slate-600',
+                ? 'bg-gradient-to-br from-[#e5504f] via-[#d62121] to-[#a91717] text-white shadow-glow-red'
+                : 'hover:bg-white/60 text-slate-600',
             )}
           >
             {p}
@@ -58,7 +58,7 @@ export default function Pagination({ page, totalPages, onNext, onPrev, onGoTo, c
       <button
         onClick={onNext}
         disabled={page === totalPages}
-        className="p-2 rounded-lg hover:bg-surface-overlay disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 transition-colors"
+        className="p-2 rounded-lg hover:bg-white/60 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 transition-colors"
         aria-label="Page suivante"
       >
         <ChevronRight className="h-4 w-4" />

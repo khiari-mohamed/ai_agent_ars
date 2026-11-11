@@ -16,7 +16,7 @@ export interface DashboardStats {
   conversationsActive: number;
   resolutionRate: number;        // 0-100
   escalationRate: number;        // 0-100
-  avgResponseTimeMs: number;
+  avgResponseTimeMs: number | null;
   avgSentimentScore: number;     // -1 to 1
   ticketsOpenCount: number;
   satisfactionScore: number;     // 0-5

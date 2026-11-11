@@ -7,7 +7,7 @@ python-multipart==0.0.9
 websockets==12.0
 python-socketio==5.11.3
 
-# Database
+# Database (PostgreSQL only)
 sqlalchemy==2.0.31
 asyncpg==0.29.0
 alembic==1.13.2
@@ -18,9 +18,8 @@ redis==5.0.7
 hiredis==2.3.2
 
 # Validation & settings
-pydantic==2.8.2
-pydantic-settings==2.3.4
 pydantic[email]==2.8.2
+pydantic-settings==2.3.4
 
 # HTTP client
 httpx==0.27.0
@@ -31,16 +30,21 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 pyotp==2.9.0
 
-# AI / LLM
-anthropic==0.31.0
+# AI / LLM (versions revisited in step 4 with llm_service)
+anthropic>=0.40,<1
 openai==1.37.0
 tiktoken==0.7.0
 
-# RAG / Embeddings
-langchain==0.2.9
-langchain-openai==0.1.17
-langchain-community==0.2.9
-langchain-text-splitters==0.2.2
+# Embeddings (BGE-M3, local). torch is installed first in the Dockerfile
+# from the CPU or CUDA wheel index; locally just `pip install -r`.
+numpy>=1.26,<3
+torch>=2.4,<3
+sentence-transformers>=3.3,<6
+# STT: fine-tuned Whisper converted to CTranslate2
+av>=11,<19
+faster-whisper>=1.1,<2
+
+# Documents
 pypdf==4.3.1
 python-docx==1.1.2
 
@@ -60,7 +64,7 @@ opentelemetry-exporter-otlp==1.25.0
 
 # Utilities
 python-dateutil==2.9.0
+tzdata
 uuid7==0.1.0
 orjson==3.10.6
 cryptography==42.0.8
-hmac-sha256

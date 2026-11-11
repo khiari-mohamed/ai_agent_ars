@@ -4,11 +4,11 @@
 
 @layer base {
   :root {
-    --color-primary:     #1f4d8c;
-    --color-primary-dark:#163a70;
-    --color-accent:      #2d62a8;
-    --scrollbar-thumb:   #b3c6e7;
-    --scrollbar-track:   #f0f4fa;
+    --color-primary:      #d62121;
+    --color-primary-dark: #b51a1a;
+    --color-accent:       #e5504f;
+    --scrollbar-thumb:    rgba(214, 33, 33, 0.28);
+    --scrollbar-track:    rgba(15, 18, 24, 0.04);
   }
 
   *,
@@ -23,7 +23,13 @@
   }
 
   body {
-    @apply bg-surface-base text-slate-800 font-sans;
+    @apply text-slate-800 font-sans;
+    background-color: #f7f4f2;
+    background-image:
+      radial-gradient(at 15% 0%, rgba(214, 33, 33, 0.09) 0px, transparent 50%),
+      radial-gradient(at 85% 8%, rgba(62, 126, 59, 0.06) 0px, transparent 45%),
+      radial-gradient(at 50% 100%, rgba(214, 33, 33, 0.07) 0px, transparent 55%);
+    background-attachment: fixed;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -41,7 +47,7 @@
   }
   ::-webkit-scrollbar-track  { background: var(--scrollbar-track); border-radius: 3px; }
   ::-webkit-scrollbar-thumb  { background: var(--scrollbar-thumb); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #7ea3d4; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(214, 33, 33, 0.45); }
 
   /* Focus ring — accessible, branded */
   :focus-visible {
@@ -64,43 +70,70 @@
 }
 
 @layer components {
+  /* ---------------------------------------------------------------- */
+  /* Glass primitives — reusable building blocks for any surface      */
+  /* ---------------------------------------------------------------- */
+  .glass {
+    @apply bg-white/55 backdrop-blur-xl border border-white/60;
+  }
+  .glass-strong {
+    @apply bg-white/75 backdrop-blur-2xl border border-white/70;
+  }
+  .glass-dark {
+    @apply bg-ink-950/60 backdrop-blur-2xl border border-white/[0.07];
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Buttons                                                           */
+  /* ---------------------------------------------------------------- */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 
-           bg-[#d62121] hover:bg-[#b51a1a] active:bg-[#8f1717]
-           text-white text-sm font-medium rounded-lg
-           transition-colors duration-150
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-400 focus-visible:ring-offset-1
-           disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5
+           bg-gradient-to-br from-[#e5504f] via-[#d62121] to-[#a91717]
+           text-white text-sm font-semibold rounded-xl
+           shadow-glow-red
+           transition-all duration-200 ease-out
+           hover:shadow-glow-red-lg hover:-translate-y-0.5
+           active:translate-y-0 active:scale-[0.98]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:hover:translate-y-0 disabled:shadow-none;
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5
-           bg-white hover:bg-surface-raised border border-surface-border
-           text-slate-700 text-sm font-medium rounded-lg
-           transition-colors duration-150
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-400 focus-visible:ring-offset-1
-           disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
+           bg-white/55 hover:bg-white/80 backdrop-blur-md border border-white/60
+           text-slate-700 text-sm font-medium rounded-xl
+           shadow-glass-sm
+           transition-all duration-200 hover:-translate-y-0.5
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-400/40 focus-visible:ring-offset-1
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:hover:translate-y-0;
   }
 
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5
-           bg-red-600 hover:bg-red-700 active:bg-red-800
-           text-white text-sm font-medium rounded-lg
-           transition-colors duration-150
+           bg-gradient-to-br from-red-500 to-red-700
+           text-white text-sm font-medium rounded-xl
+           shadow-[0_8px_20px_-4px_rgb(220_38_38_/_0.45)]
+           transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-4px_rgb(220_38_38_/_0.55)]
+           active:translate-y-0 active:scale-[0.98]
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1
            disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
   }
 
+  /* ---------------------------------------------------------------- */
+  /* Surfaces                                                          */
+  /* ---------------------------------------------------------------- */
   .card {
-    @apply bg-white rounded-xl border border-surface-border shadow-card;
+    @apply bg-white/65 backdrop-blur-xl rounded-2xl border border-white/60
+           shadow-glass transition-shadow duration-300;
   }
 
   .input-base {
-    @apply block w-full px-3.5 py-2.5 rounded-lg border border-surface-border
-           bg-white text-slate-800 text-sm placeholder:text-slate-400
-           transition-colors duration-150
-           focus:outline-none focus:ring-2 focus:ring-[#d62121] focus:border-[#d62121]
-           disabled:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60;
+    @apply block w-full px-3.5 py-2.5 rounded-xl border border-white/70
+           bg-white/55 backdrop-blur-md text-slate-800 text-sm placeholder:text-slate-400
+           shadow-[inset_0_1px_2px_rgba(15,23,42,0.05)]
+           transition-all duration-150
+           focus:outline-none focus:ring-2 focus:ring-[#d62121]/25 focus:border-[#d62121]/40 focus:bg-white/75
+           disabled:bg-white/30 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .label-base {
@@ -108,13 +141,13 @@
   }
 
   .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium backdrop-blur-sm;
   }
 }
 
 @layer utilities {
   .text-balance { text-wrap: balance; }
-  
+
   .scrollbar-hidden {
     -ms-overflow-style: none;
     scrollbar-width: none;

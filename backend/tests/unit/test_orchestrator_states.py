@@ -1,56 +1,100 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.orchestrator import Orchestrator, ConvState
+from app.core.exceptions import LLMError
+from app.services.llm_service import LLMResponse
+from app.services.orchestrator import ConvState, Orchestrator
+
+FR_REPLY = '{"language":"fr","display_text":"Bonjour, je vous écoute.","tts_text":"Bonjour, je vous écoute."}'
+TN_REPLY = '{"language":"tn","display_text":"Behi, chnowa el mochkla ?","tts_text":"باهي، شنوّة المشكلة؟"}'
+
+
+class FakeLLM:
+    def __init__(self, *replies: str | Exception) -> None:
+        self._replies = list(replies)
+        self.calls: list[dict] = []
+
+    async def complete(self, messages, *, system, **kwargs) -> LLMResponse:
+        self.calls.append({"messages": messages, "system": system})
+        item = self._replies.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return LLMResponse("fake", "fake", item, (), "end_turn", 0, 0, 0)
 
 
 @pytest.fixture
-def session_id() -> str:
-    return "test-session-001"
+def build(monkeypatch: pytest.MonkeyPatch, memory_sessions):
+    monkeypatch.setattr(
+        "app.services.orchestrator.analyze_sentiment",
+        AsyncMock(return_value={"score": 0.0, "label": "NEUTRE"}),
+    )
+    monkeypatch.setattr("app.services.orchestrator.generate_summary_and_email", AsyncMock())
+
+    def _build(*replies: str | Exception, context: str = "") -> tuple[Orchestrator, FakeLLM]:
+        orch = Orchestrator(session_id="s1", conversation_id="00000000-0000-0000-0000-000000000001")
+        llm = FakeLLM(*replies)
+        orch._llm = llm  # type: ignore[assignment]
+        orch._rag = SimpleNamespace(build_context_for_llm=AsyncMock(return_value=context))  # type: ignore[assignment]
+        orch._crm = AsyncMock()
+        return orch, llm
+
+    return _build
 
 
-@pytest.fixture
-def conversation_id() -> str:
-    import uuid
-    return str(uuid.uuid4())
+async def test_greeting_is_static_and_recorded(build, memory_sessions) -> None:
+    orch, llm = build()
+    result = await orch.greeting()
+    assert "ARS" in result["text"] and result["tts_text"]
+    assert result["state"] == ConvState.INIT.value
+    assert llm.calls == []
+    assert memory_sessions["s1"]["transcript"][0]["role"] == "assistant"
 
 
-@pytest.mark.asyncio
-async def test_init_state_returns_greeting(session_id: str, conversation_id: str) -> None:
-    with (
-        patch("app.services.orchestrator.get_session", AsyncMock(return_value=None)),
-        patch("app.services.orchestrator.set_session", AsyncMock()),
-        patch("app.services.orchestrator.extend_session_ttl", AsyncMock()),
-    ):
-        orch = Orchestrator(session_id=session_id, conversation_id=conversation_id)
-        result = await orch.process("__INIT__")
-        assert result["state"] == ConvState.PENDING_CIN.value
-        assert "CIN" in result["text"]
+async def test_social_utterance_skips_retrieval(build) -> None:
+    orch, llm = build(FR_REPLY)
+    result = await orch.process("Bonjour")
+    orch._rag.build_context_for_llm.assert_not_awaited()  # type: ignore[attr-defined]
+    assert result["state"] == ConvState.ACTIVE.value
+    assert result["language"] == "fr"
 
 
-@pytest.mark.asyncio
-async def test_invalid_cin_increments_attempts(session_id: str, conversation_id: str) -> None:
-    base_session = {
-        "state": ConvState.PENDING_CIN,
-        "messages": [{"role": "user", "content": "__INIT__"}],
-        "assure": None,
-        "auth_attempts": 0,
-        "pending_cin": None,
-    }
+async def test_content_utterance_injects_kb_context(build) -> None:
+    orch, llm = build(TN_REPLY, context="Réponse officielle: 15 jours")
+    result = await orch.process("win remboursement mta3i")
+    orch._rag.build_context_for_llm.assert_awaited_once()  # type: ignore[attr-defined]
+    assert "Réponse officielle: 15 jours" in llm.calls[0]["system"]
+    assert result["language"] == "tn"
+    assert result["tts_text"].startswith("باهي")
 
-    mock_dh = AsyncMock()
-    mock_dh.get_assure.side_effect = Exception("Not found")
 
-    with (
-        patch("app.services.orchestrator.get_session", AsyncMock(return_value=base_session)),
-        patch("app.services.orchestrator.set_session", AsyncMock()),
-        patch("app.services.orchestrator.extend_session_ttl", AsyncMock()),
-        patch("app.services.orchestrator.get_digihealth_client", return_value=mock_dh),
-        patch("app.services.orchestrator.get_crm_client", return_value=AsyncMock()),
-        patch("app.services.orchestrator.get_sms_client", return_value=AsyncMock()),
-    ):
-        orch = Orchestrator(session_id=session_id, conversation_id=conversation_id)
-        result = await orch.process("00000000")
-        assert "introuvable" in result["text"].lower() or "invalid" in result["text"].lower()
+async def test_human_request_escalates_without_llm(build) -> None:
+    orch, llm = build()
+    result = await orch.process("je veux parler à un conseiller")
+    assert result["should_escalate"] and result["escalation_reason"] == "USER_REQUESTED"
+    assert llm.calls == []
+    follow_up = await orch.process("allo ?")
+    assert follow_up["state"] == ConvState.ESCALATED.value
+    assert llm.calls == []
+
+
+async def test_bare_word_agent_does_not_escalate(build) -> None:
+    orch, _ = build(FR_REPLY)
+    result = await orch.process("personne ne m'a répondu pour mon remboursement")
+    assert not result["should_escalate"]
+
+
+async def test_llm_outage_escalates_with_technical_message(build) -> None:
+    orch, _ = build(LLMError())
+    result = await orch.process("Où en est ma réclamation ?")
+    assert result["should_escalate"] and result["escalation_reason"] == "LLM_UNAVAILABLE"
+
+
+async def test_contract_violation_is_flagged_not_fatal(build) -> None:
+    orch, _ = build("Bonjour, voici ma réponse en texte libre")
+    result = await orch.process("Quels documents pour un remboursement ?")
+    assert result["degraded"] is True
+    assert result["text"].startswith("Bonjour")

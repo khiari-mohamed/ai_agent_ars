@@ -4,8 +4,8 @@ export type TicketStatus = 'NOUVEAU' | 'EN_COURS' | 'EN_ATTENTE_VALIDATION' | 'R
 
 export interface Ticket {
   id: string;
-  crmId: string;
-  conversationId: string;
+  crmId: string | null;
+  conversationId: string | null;
   assureCin: string;
   assureNomComplet: string;
   category: TicketCategory;

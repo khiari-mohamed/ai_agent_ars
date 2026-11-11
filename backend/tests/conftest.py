@@ -1,47 +1,74 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import os
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
-from app.core.config import settings
-from app.db.session import get_db
-from app.main import app
-from app.models.db.base import Base
+# Settings are validated at import time → set the environment BEFORE importing app.*.
+# Tests never touch the dev DB: DB tests need TEST_DATABASE_URL (a database ending in "_test").
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+os.environ["DATABASE_URL"] = (
+    TEST_DATABASE_URL or "postgresql+asyncpg://postgres:postgres@localhost:5433/ars_agent_test"
+)
+os.environ.setdefault("APP_SECRET_KEY", "test-secret-key-not-for-production-000000")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-key-not-for-production-0000000000")
+os.environ["EMBEDDING_PRELOAD"] = "false"
 
-# Use SQLite in-memory for tests (override in CI to use PostgreSQL for pgvector tests)
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+from app.db.session import get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.db.base import Base  # noqa: E402
+from app.models.db.audit_event import AuditEvent  # noqa: E402, F401
+from app.models.db.conversation import Conversation, Message  # noqa: E402, F401
+from app.models.db.knowledge_doc import KnowledgeChunk, KnowledgeDoc  # noqa: E402, F401
+from app.models.db.ticket import Ticket  # noqa: E402, F401
+from app.models.db.user import User  # noqa: E402, F401
 
 
-@pytest.fixture(scope="session")
-def event_loop():  # type: ignore[no-untyped-def]
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
-async def test_engine():
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+async def _reset_schema() -> None:
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
-    yield engine
     await engine.dispose()
 
 
+@pytest.fixture(scope="session")
+def _schema() -> None:
+    if not TEST_DATABASE_URL:
+        pytest.skip("TEST_DATABASE_URL non défini (Postgres pgvector requis)")
+    if not TEST_DATABASE_URL.rsplit("/", 1)[-1].endswith("_test"):
+        pytest.exit("TEST_DATABASE_URL doit pointer vers une base dont le nom finit par _test")
+    asyncio.run(_reset_schema())
+
+
 @pytest_asyncio.fixture
-async def db(test_engine) -> AsyncGenerator[AsyncSession, None]:  # type: ignore[no-untyped-def]
-    TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
-    async with TestSession() as session:
+async def db(_schema: None) -> AsyncGenerator[AsyncSession, None]:
+    """Each test runs in a transaction that is rolled back (commits become savepoints)."""
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    async with engine.connect() as conn:
+        outer = await conn.begin()
+        session = AsyncSession(
+            bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint"
+        )
         yield session
-        await session.rollback()
+        await session.close()
+        await outer.rollback()
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture
@@ -56,18 +83,36 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-def mock_redis(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mock Redis calls in tests."""
-    monkeypatch.setattr("app.core.cache.get_redis", AsyncMock(return_value=AsyncMock()))
-    monkeypatch.setattr("app.core.cache.get_session", AsyncMock(return_value=None))
-    monkeypatch.setattr("app.core.cache.set_session", AsyncMock())
-    monkeypatch.setattr("app.core.cache.store_otp", AsyncMock())
-    monkeypatch.setattr("app.core.cache.verify_and_consume_otp", AsyncMock(return_value=True))
+def memory_sessions(monkeypatch: pytest.MonkeyPatch) -> dict[str, dict[str, Any]]:
+    """In-memory replacement of the Redis session store used by the orchestrator."""
+    store: dict[str, dict[str, Any]] = {}
+
+    async def get_session(sid: str) -> dict[str, Any] | None:
+        return copy.deepcopy(store.get(sid))
+
+    async def set_session(sid: str, data: dict[str, Any], ttl: int | None = None) -> None:
+        store[sid] = copy.deepcopy(data)
+
+    async def delete_session(sid: str) -> None:
+        store.pop(sid, None)
+
+    @asynccontextmanager
+    async def session_lock(sid: str, *args: Any, **kwargs: Any):  # type: ignore[no-untyped-def]
+        yield
+
+    target = "app.services.orchestrator"
+    monkeypatch.setattr(f"{target}.get_session", get_session)
+    monkeypatch.setattr(f"{target}.set_session", set_session)
+    monkeypatch.setattr(f"{target}.delete_session", delete_session)
+    monkeypatch.setattr(f"{target}.session_lock", session_lock)
+    monkeypatch.setattr(f"{target}.extend_session_ttl", AsyncMock())
+    return store
 
 
 @pytest.fixture
 def valid_admin_token() -> str:
     from app.core.security import create_access_token
+
     return create_access_token(subject=str(uuid.uuid4()), role="ADMIN")
 
 

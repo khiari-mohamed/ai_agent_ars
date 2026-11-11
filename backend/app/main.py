@@ -32,13 +32,45 @@ if settings.SENTRY_DSN:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("app_starting", env=settings.APP_ENV)
-    # Verify DB connection on startup
-    from app.db.session import engine
     from sqlalchemy import text
+
+    from app.db.session import engine
+    from app.services.embedding_service import get_embedding_service
+    from app.services.llm_service import get_llm_service
+    from app.services.stt_service import get_stt_service
+    from app.services.tts_service import get_tts_service
+
+    # Schema is owned by Alembic. Fail fast if the DB is unreachable or unmigrated.
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
+        installed = {
+            row[0]
+            for row in await conn.execute(
+                text("SELECT extname FROM pg_extension WHERE extname IN ('vector','pg_trgm')")
+            )
+        }
+    missing = {"vector", "pg_trgm"} - installed
+    if missing:
+        raise RuntimeError(
+            f"Extensions PostgreSQL manquantes: {sorted(missing)}. "
+            "Lancez `alembic upgrade head` sur une base pgvector/pgvector:pg16."
+        )
     logger.info("database_connected")
+
+    embedder = get_embedding_service()
+    if settings.EMBEDDING_PRELOAD:
+        await embedder.load()
+
+    stt_service = get_stt_service()
+    if settings.STT_PRELOAD:
+        await stt_service.load()
+
     yield
+
+    embedder.close()
+    stt_service.close()
+    await get_llm_service().close()
+    await get_tts_service().close()
     await close_redis()
     await engine.dispose()
     logger.info("app_shutdown")
@@ -111,15 +143,10 @@ from app.core.exceptions import AppError
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> ORJSONResponse:
-    status_map = {
-        "AUTHENTICATION_ERROR": 401,
-        "AUTHORIZATION_ERROR": 403,
-        "NOT_FOUND": 404,
-        "RATE_LIMIT_EXCEEDED": 429,
-    }
-    status_code = status_map.get(exc.code, 500)
+    if exc.status_code >= 500:
+        logger.error("app_error", code=exc.code, error=exc.message, path=request.url.path)
     return ORJSONResponse(
-        status_code=status_code,
+        status_code=exc.status_code,
         content={"code": exc.code, "message": exc.message},
     )
 
@@ -144,9 +171,15 @@ from app.routers.admin_users import router as admin_users_router
 from app.routers.admin_knowledge import router as admin_knowledge_router
 from app.routers.admin_audit import router as admin_audit_router
 from app.routers.metrics_endpoint import router as metrics_router
+from app.routers.stt import router as stt_router
+from app.routers.tts import router as tts_router
+from app.routers.voice import router as voice_router
 
 app.include_router(health_router)
 app.include_router(metrics_router)
+app.include_router(stt_router, prefix="/api")
+app.include_router(tts_router, prefix="/api")
+app.include_router(voice_router)
 app.include_router(chat_router)
 app.include_router(admin_auth_router, prefix="/api")
 app.include_router(admin_conv_router, prefix="/api")

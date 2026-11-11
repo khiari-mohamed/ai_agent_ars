@@ -34,4 +34,15 @@ describe('MessageBubble', () => {
     expect(screen.getByText('line1')).toBeTruthy();
     expect(screen.getByText('line2')).toBeTruthy();
   });
+
+  it('uses right-to-left direction for Arabic-script Tunisian and shows ticket references', () => {
+    const message = {
+      ...makeMsg('assistant', 'مرحبا'),
+      language: 'tn' as const,
+      ticketId: 'ticket-123',
+    };
+    const { container } = render(<MessageBubble message={message} isLast={false} />);
+    expect(container.querySelector('[dir="rtl"]')).toBeTruthy();
+    expect(screen.getByText('Ticket créé · ticket-123')).toBeTruthy();
+  });
 });

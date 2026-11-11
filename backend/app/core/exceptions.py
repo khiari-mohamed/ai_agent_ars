@@ -2,14 +2,43 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
+# Single source of truth for code → HTTP status (used by the global handler in main.py).
+_CODE_TO_STATUS: dict[str, int] = {
+    "AUTHENTICATION_ERROR": 401,
+    "AUTHORIZATION_ERROR": 403,
+    "NOT_FOUND": 404,
+    "VALIDATION_ERROR": 422,
+    "AUTH_LOCKOUT": 423,
+    "RATE_LIMIT_EXCEEDED": 429,
+    "DIGIHEALTH_ERROR": 502,
+    "CRM_ERROR": 502,
+    "CIRCUIT_OPEN": 503,
+    "EMBEDDING_ERROR": 503,
+    "LLM_ERROR": 503,
+    "STT_ERROR": 503,
+    "TTS_ERROR": 503,
+}
+
 
 class AppError(Exception):
-    """Base application error."""
+    """Base application error. `status_code` is derived from `code` unless given."""
 
-    def __init__(self, message: str, code: str = "INTERNAL_ERROR") -> None:
+    status_code: int = 500
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "INTERNAL_ERROR",
+        status_code: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.code = code
+        self.status_code = (
+            status_code
+            if status_code is not None
+            else _CODE_TO_STATUS.get(code, type(self).status_code)
+        )
 
 
 class AuthenticationError(AppError):
@@ -32,14 +61,48 @@ class ValidationError(AppError):
         super().__init__(message, "VALIDATION_ERROR")
 
 
+class EmbeddingError(AppError):
+    def __init__(self, message: str = "Service d'embedding indisponible") -> None:
+        super().__init__(message, "EMBEDDING_ERROR")
+
+
+class LLMError(AppError):
+    def __init__(self, message: str = "Service LLM indisponible") -> None:
+        super().__init__(message, "LLM_ERROR")
+
+
+class STTError(AppError):
+    def __init__(self, message: str = "Service de transcription indisponible") -> None:
+        super().__init__(message, "STT_ERROR")
+
+
+class TTSError(AppError):
+    def __init__(self, message: str = "Service de synthèse vocale indisponible") -> None:
+        super().__init__(message, "TTS_ERROR")
+
+
+class CircuitOpenError(AppError):
+    """Raised by a circuit breaker while it is open. Works for any service."""
+
+    def __init__(self, service: str) -> None:
+        AppError.__init__(
+            self,
+            f"Service '{service}' temporairement indisponible (circuit ouvert)",
+            "CIRCUIT_OPEN",
+        )
+        self.service = service
+
+
 class DigiHealthError(AppError):
     def __init__(self, message: str = "Service DigiHealth indisponible") -> None:
         super().__init__(message, "DIGIHEALTH_ERROR")
 
 
-class DigiHealthCircuitOpenError(DigiHealthError):
+class DigiHealthCircuitOpenError(CircuitOpenError, DigiHealthError):
+    """Kept until DigiHealth is removed (step 4)."""
+
     def __init__(self) -> None:
-        super().__init__("DigiHealth circuit breaker ouvert — service temporairement indisponible")
+        CircuitOpenError.__init__(self, "digihealth")
 
 
 class CRMError(AppError):

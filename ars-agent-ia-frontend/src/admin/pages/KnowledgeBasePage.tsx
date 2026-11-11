@@ -1,70 +1,73 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FileText, Trash2, CheckCircle, Loader, AlertCircle, BookOpen } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { BookOpen, CheckCircle, Plus, Trash2, XCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import Spinner from '@/shared/components/Spinner';
 import EmptyState from '@/shared/components/EmptyState';
-import { adminApi } from '@/lib/api-admin';
+import Modal from '@/shared/components/Modal';
+import { adminApi, type KnowledgeDoc } from '@/lib/api-admin';
 import { useAsync } from '@/lib/hooks/useAsync';
 import { formatDate } from '@/lib/utils';
-import Modal from '@/shared/components/Modal';
-import toast from 'react-hot-toast';
 
-interface KnowledgeDoc {
-  id: string;
+interface DocumentForm {
+  source: string;
+  language: 'fr' | 'tn';
+  intent: string;
   title: string;
-  sourceUrl: string | null;
-  status: 'INDEXING' | 'INDEXED' | 'FAILED';
-  chunkCount: number;
-  uploadedAt: string;
+  question: string;
+  answer: string;
 }
 
-const statusIcon = {
-  INDEXING: <Loader className="h-4 w-4 text-amber-500 animate-spin" />,
-  INDEXED:  <CheckCircle className="h-4 w-4 text-sage-500" />,
-  FAILED:   <AlertCircle className="h-4 w-4 text-red-500" />,
+const EMPTY_FORM: DocumentForm = {
+  source: '',
+  language: 'fr',
+  intent: '',
+  title: '',
+  question: '',
+  answer: '',
 };
 
-const statusLabel = { INDEXING: 'Indexation…', INDEXED: 'Indexé', FAILED: 'Erreur' };
-
 export default function KnowledgeBasePage() {
-  const docsAsync   = useAsync<KnowledgeDoc[]>();
-  const [deleteId, setDeleteId]   = useState<string | null>(null);
-  const [deleting, setDeleting]   = useState(false);
-  const [dragOver, setDragOver]   = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const docsAsync = useAsync<KnowledgeDoc[]>();
+  const createAsync = useAsync<KnowledgeDoc>();
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
-    docsAsync.run(adminApi.listDocuments());
+    void docsAsync.run(adminApi.listDocuments());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowed.includes(file.type)) {
-      toast.error('Format non supporté. Utilisez PDF ou DOCX.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux (max 10 Mo).');
-      return;
-    }
-    setUploading(true);
-    // In production: use FormData + fetch to /api/admin/knowledge/upload
-    await new Promise((r) => setTimeout(r, 1500)); // mock
-    toast.success(`"${file.name}" ajouté à la file d'indexation`);
-    setUploading(false);
-    load();
+  const setField = <K extends keyof DocumentForm>(key: K, value: DocumentForm[K]) => {
+    setForm((current) => ({ ...current, [key]: value }));
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    handleFileUpload(e.dataTransfer.files);
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const source = form.source.trim();
+    const question = form.question.trim();
+    const answer = form.answer.trim();
+    if (!source || !question || !answer) {
+      toast.error('La source, la question et la réponse sont obligatoires.');
+      return;
+    }
+
+    const created = await createAsync.run(adminApi.createDocument({
+      source,
+      language: form.language,
+      intent: form.intent.trim() || null,
+      title: form.title.trim() || null,
+      question,
+      answer,
+    }));
+    if (created) {
+      toast.success('Entrée ajoutée à la base de connaissances.');
+      setForm(EMPTY_FORM);
+      load();
+    }
   };
 
   const handleDelete = async () => {
@@ -72,11 +75,11 @@ export default function KnowledgeBasePage() {
     setDeleting(true);
     try {
       await adminApi.deleteDocument(deleteId);
-      toast.success('Document supprimé');
+      toast.success('Entrée supprimée.');
       setDeleteId(null);
       load();
     } catch {
-      toast.error('Erreur lors de la suppression');
+      toast.error('Impossible de supprimer cette entrée. Vérifiez vos droits et réessayez.');
     } finally {
       setDeleting(false);
     }
@@ -86,62 +89,116 @@ export default function KnowledgeBasePage() {
 
   return (
     <div className="p-6 space-y-5 w-full">
-      <PageHeader title="Base de connaissances" subtitle="Documents indexés pour le RAG — Agent IA" />
+      <PageHeader title="Base de connaissances" subtitle="Questions et réponses indexées pour le RAG — Agent IA" />
 
-      {/* Upload zone */}
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors duration-150 ${
-          dragOver ? 'border-navy-400 bg-navy-50' : 'border-surface-border hover:border-navy-300 hover:bg-surface-raised'
-        }`}
-        role="button"
-        tabIndex={0}
-        aria-label="Zone de dépôt de document"
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.docx"
-          className="hidden"
-          onChange={(e) => handleFileUpload(e.target.files)}
-          aria-hidden
-        />
-        {uploading ? (
-          <Spinner size="lg" className="mx-auto mb-2" />
-        ) : (
-          <Upload className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-        )}
-        <p className="text-sm font-medium text-slate-600">
-          {uploading ? 'Traitement en cours…' : 'Déposez un PDF ou DOCX ici'}
+      <form onSubmit={handleCreate} className="card p-5 space-y-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <Plus className="h-4 w-4 text-[#b51a1a]" />
+          Ajouter une entrée
+        </h2>
+        <p className="text-xs text-slate-500">
+          Le backend accepte des questions et réponses textuelles. L’import de fichiers n’est pas disponible dans son API actuelle.
         </p>
-        <p className="text-xs text-slate-400 mt-1">ou cliquez pour parcourir — Max 10 Mo</p>
-      </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-xs text-slate-600">
+            Source *
+            <input
+              value={form.source}
+              onChange={(event) => setField('source', event.target.value)}
+              className="input-base"
+              maxLength={128}
+              required
+            />
+          </label>
+          <label className="space-y-1 text-xs text-slate-600">
+            Langue
+            <select
+              value={form.language}
+              onChange={(event) => setField('language', event.target.value as DocumentForm['language'])}
+              className="input-base"
+            >
+              <option value="fr">Français</option>
+              <option value="tn">Tunisien</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-xs text-slate-600">
+            Titre
+            <input
+              value={form.title}
+              onChange={(event) => setField('title', event.target.value)}
+              className="input-base"
+              maxLength={1000}
+            />
+          </label>
+          <label className="space-y-1 text-xs text-slate-600">
+            Intention
+            <input
+              value={form.intent}
+              onChange={(event) => setField('intent', event.target.value)}
+              className="input-base"
+              maxLength={64}
+            />
+          </label>
+        </div>
+        <label className="block space-y-1 text-xs text-slate-600">
+          Question *
+          <textarea
+            value={form.question}
+            onChange={(event) => setField('question', event.target.value)}
+            className="input-base min-h-20"
+            maxLength={4000}
+            required
+          />
+        </label>
+        <label className="block space-y-1 text-xs text-slate-600">
+          Réponse officielle *
+          <textarea
+            value={form.answer}
+            onChange={(event) => setField('answer', event.target.value)}
+            className="input-base min-h-28"
+            maxLength={8000}
+            required
+          />
+        </label>
+        <div className="flex justify-end">
+          <button type="submit" disabled={createAsync.loading} className="btn-primary text-sm">
+            {createAsync.loading ? <Spinner size="sm" className="text-white" /> : 'Ajouter à la base'}
+          </button>
+        </div>
+        {createAsync.error && <p role="alert" className="text-sm text-red-600">{createAsync.error}</p>}
+      </form>
 
-      {/* Docs list */}
       <div className="card overflow-hidden">
         {docsAsync.loading ? (
           <div className="flex items-center justify-center py-12"><Spinner size="lg" /></div>
+        ) : docsAsync.error ? (
+          <p role="alert" className="p-5 text-sm text-red-600">{docsAsync.error}</p>
         ) : docs.length > 0 ? (
-          <ul className="divide-y divide-surface-border" aria-label="Documents indexés">
+          <ul className="divide-y divide-white/40" aria-label="Documents indexés">
             {docs.map((doc) => (
-              <li key={doc.id} className="flex items-center gap-4 px-5 py-4 hover:bg-surface-raised transition-colors">
-                <FileText className="h-5 w-5 text-navy-300 flex-shrink-0" />
+              <li key={doc.id} className="flex items-start gap-4 px-5 py-4 hover:bg-white/40 transition-colors">
+                <div className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/60 border border-white/60">
+                  <BookOpen className="h-4 w-4 text-[#b51a1a]/70" />
+                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{doc.title}</p>
-                  <p className="text-xs text-slate-400">{doc.chunkCount} segments · {formatDate(doc.uploadedAt)}</p>
+                  <p className="text-sm font-medium text-slate-800">{doc.title || doc.question}</p>
+                  <p className="mt-1 text-xs text-slate-500">{doc.question}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-slate-400">{doc.answer}</p>
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    {doc.source} · {doc.language ?? 'langue non précisée'} · {formatDate(doc.createdAt)}
+                    {doc.intent ? ` · ${doc.intent}` : ''}
+                  </p>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  {statusIcon[doc.status]}
-                  <span>{statusLabel[doc.status]}</span>
-                </div>
+                <span className={`flex items-center gap-1 text-xs ${doc.isActive ? 'text-sage-600' : 'text-slate-400'}`}>
+                  {doc.isActive
+                    ? <><CheckCircle className="h-3.5 w-3.5" />Actif</>
+                    : <><XCircle className="h-3.5 w-3.5" />Inactif</>}
+                </span>
                 <button
+                  type="button"
                   onClick={() => setDeleteId(doc.id)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
-                  aria-label={`Supprimer ${doc.title}`}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                  aria-label={`Supprimer ${doc.title || doc.question}`}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -152,19 +209,16 @@ export default function KnowledgeBasePage() {
           <EmptyState
             icon={BookOpen}
             title="Base de connaissances vide"
-            description="Déposez des documents PDF ou DOCX pour alimenter la base de connaissances de l'agent IA."
+            description="Ajoutez une question et sa réponse officielle pour alimenter la recherche."
           />
         )}
       </div>
 
-      {/* Delete confirm modal */}
-      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Supprimer le document" size="sm">
-        <p className="text-sm text-slate-600 mb-5">
-          Êtes-vous sûr de vouloir supprimer ce document ? Cette action est irréversible et le document sera désindexé.
-        </p>
-        <div className="flex gap-3 justify-end">
-          <button onClick={() => setDeleteId(null)} className="btn-secondary">Annuler</button>
-          <button onClick={handleDelete} disabled={deleting} className="btn-danger">
+      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Supprimer l’entrée" size="sm">
+        <p className="mb-5 text-sm text-slate-600">Cette entrée sera supprimée de la base de connaissances.</p>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={() => setDeleteId(null)} className="btn-secondary">Annuler</button>
+          <button type="button" onClick={() => void handleDelete()} disabled={deleting} className="btn-danger">
             {deleting ? <Spinner size="sm" className="text-white" /> : 'Supprimer'}
           </button>
         </div>

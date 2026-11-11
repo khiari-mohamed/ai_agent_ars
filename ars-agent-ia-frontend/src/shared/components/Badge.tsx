@@ -9,7 +9,7 @@ export default function Badge({ children, className, dot = false, ...props }: Ba
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap',
+        'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap backdrop-blur-sm',
         className
       )}
       {...props}

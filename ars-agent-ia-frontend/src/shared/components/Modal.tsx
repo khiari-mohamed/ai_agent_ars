@@ -54,17 +54,18 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
       ref={dialogRef}
       onClick={handleBackdropClick}
       className={cn(
-        'w-full rounded-2xl border border-surface-border shadow-card-lg',
-        'p-0 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm',
+        'w-full rounded-3xl border border-white/60 shadow-glass-lg',
+        'bg-white/80 backdrop-blur-2xl',
+        'p-0 backdrop:bg-ink-950/50 backdrop:backdrop-blur-sm',
         'open:animate-fade-in',
         sizeMap[size],
       )}
     >
-      <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/50">
         <h2 className="text-base font-semibold text-slate-800">{title}</h2>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-surface-overlay text-slate-400 hover:text-slate-600 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-white/60 text-slate-400 hover:text-slate-600 transition-colors"
           aria-label="Fermer"
         >
           <X className="h-4 w-4" />

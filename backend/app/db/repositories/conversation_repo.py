@@ -8,6 +8,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.timezone import start_of_tunis_day_utc
 from app.models.db.conversation import Conversation, Message
 from app.core.exceptions import NotFoundError
 
@@ -105,6 +106,11 @@ class ConversationRepository:
             .values(sentiment_score=score, sentiment_label=label)
         )
 
+    async def update_language(self, conv_id: uuid.UUID, language: str) -> None:
+        await self.db.execute(
+            update(Conversation).where(Conversation.id == conv_id).values(language=language)
+        )
+
     async def update_assure(
         self,
         conv_id: uuid.UUID,
@@ -183,7 +189,7 @@ class ConversationRepository:
 
     async def get_stats(self) -> dict[str, Any]:
         from sqlalchemy import case
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = start_of_tunis_day_utc()
 
         result = await self.db.execute(
             select(

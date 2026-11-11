@@ -79,8 +79,6 @@ def upgrade() -> None:
         sa.Column("tokens_used", sa.Integer, nullable=True),
         sa.Column("timestamp", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
-    op.create_index("ix_messages_conversation_id", "messages", ["conversation_id"])
-
     # ── tickets ───────────────────────────────────────────────────────────────
     op.create_table(
         "tickets",
@@ -124,46 +122,21 @@ def upgrade() -> None:
     op.create_index("ix_audit_events_actor_id", "audit_events", ["actor_id"])
 
     # Immutability: prevent UPDATE and DELETE on audit_events
-    op.execute("""
-        CREATE OR REPLACE RULE audit_no_update AS ON UPDATE TO audit_events DO INSTEAD NOTHING;
-        CREATE OR REPLACE RULE audit_no_delete AS ON DELETE TO audit_events DO INSTEAD NOTHING;
-    """)
-
-    # ── knowledge_docs ────────────────────────────────────────────────────────
-    op.create_table(
-        "knowledge_docs",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("title", sa.String(500), nullable=False),
-        sa.Column("source_url", sa.String(1000), nullable=True),
-        sa.Column("status", sa.String(20), nullable=False, server_default="INDEXING"),
-        sa.Column("chunk_count", sa.Integer, nullable=False, server_default="0"),
-        sa.Column("file_hash", sa.String(64), nullable=True),
-        sa.Column("uploaded_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    op.execute(
+        "CREATE OR REPLACE RULE audit_no_update AS "
+        "ON UPDATE TO audit_events DO INSTEAD NOTHING"
     )
-
-    # ── knowledge_chunks (pgvector) ───────────────────────────────────────────
-    op.create_table(
-        "knowledge_chunks",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("doc_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("knowledge_docs.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("content", sa.Text, nullable=False),
-        sa.Column("chunk_index", sa.Integer, nullable=False),
-        sa.Column("embedding", Vector(3072), nullable=True),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    op.execute(
+        "CREATE OR REPLACE RULE audit_no_delete AS "
+        "ON DELETE TO audit_events DO INSTEAD NOTHING"
     )
-    # IVFFlat index for approximate nearest neighbour search
-    op.execute("CREATE INDEX ix_knowledge_chunks_embedding ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
-
 
 def downgrade() -> None:
     op.execute("DROP RULE IF EXISTS audit_no_delete ON audit_events")
     op.execute("DROP RULE IF EXISTS audit_no_update ON audit_events")
-    op.drop_table("knowledge_chunks")
-    op.drop_table("knowledge_docs")
     op.drop_table("audit_events")
     op.drop_table("tickets")
     op.drop_table("messages")
     op.drop_table("conversations")
     op.drop_table("users")
-    op.execute("DROP EXTENSION IF EXISTS vector")
     op.execute("DROP EXTENSION IF EXISTS pgcrypto")

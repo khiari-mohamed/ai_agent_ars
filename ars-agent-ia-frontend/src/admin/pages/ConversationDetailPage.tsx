@@ -21,7 +21,7 @@ export default function ConversationDetailPage() {
   const { id }    = useParams<{ id: string }>();
   const navigate  = useNavigate();
   const convAsync = useAsync<Conversation>();
-  const sendAsync = useAsync<void>();
+  const sendAsync = useAsync<{ status: string }>();
 
   const load = useCallback(() => {
     if (!id) return;
@@ -35,7 +35,7 @@ export default function ConversationDetailPage() {
     if (!id) return;
     const res = await sendAsync.run(adminApi.sendEmail(id));
     if (res !== null) {
-      toast.success('Email envoyé avec succès');
+      toast.success(res.status === 'sent' ? 'Email envoyé avec succès' : `Statut de l’email : ${res.status}`);
       load();
     }
   };
@@ -66,7 +66,7 @@ export default function ConversationDetailPage() {
       {/* Back */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors mb-2"
+        className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-[#b51a1a] transition-colors mb-2"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour aux conversations
@@ -81,8 +81,8 @@ export default function ConversationDetailPage() {
       <div className="card p-4 flex flex-wrap gap-4">
         <div className="flex items-center gap-2">
           {conv.channel === 'CHAT_WEB'
-            ? <MessageSquare className="h-4 w-4 text-slate-400" />
-            : <Phone className="h-4 w-4 text-slate-400" />
+            ? <MessageSquare className="h-4 w-4 text-[#b51a1a]/60" />
+            : <Phone className="h-4 w-4 text-[#b51a1a]/60" />
           }
           <span className="text-sm text-slate-600">{channelLabel(conv.channel)}</span>
         </div>
@@ -106,9 +106,9 @@ export default function ConversationDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Transcript */}
         <div className="card lg:col-span-2 overflow-hidden">
-          <div className="px-5 py-4 border-b border-surface-border">
+          <div className="px-5 py-4 border-b border-white/50">
             <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-slate-400" />
+              <MessageSquare className="h-4 w-4 text-[#b51a1a]/70" />
               Transcript ({conv.messages.length} messages)
             </h2>
           </div>
@@ -124,8 +124,8 @@ export default function ConversationDetailPage() {
                 <div className={cn(
                   'px-3.5 py-2.5 rounded-2xl text-sm max-w-[75%] leading-relaxed',
                   msg.role === 'user'
-                    ? 'bg-navy-100 text-navy-900 rounded-br-sm'
-                    : 'bg-surface-raised border border-surface-border text-slate-800 rounded-bl-sm',
+                    ? 'bg-gradient-to-br from-[#e5504f] via-[#d62121] to-[#a91717] text-white shadow-glow-red rounded-br-sm'
+                    : 'bg-white/70 backdrop-blur-md border border-white/70 text-slate-800 shadow-glass-sm rounded-bl-sm',
                 )}>
                   {msg.content}
                 </div>
@@ -140,11 +140,11 @@ export default function ConversationDetailPage() {
           <div className="card p-4">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Score de sentiment</h3>
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-white/50 rounded-full overflow-hidden shadow-inner">
                 <div
                   className={cn(
                     'h-full rounded-full transition-all duration-700',
-                    sentPct >= 60 ? 'bg-sage-400' : sentPct >= 40 ? 'bg-amber-400' : 'bg-red-400',
+                    sentPct >= 60 ? 'bg-gradient-to-r from-sage-400 to-sage-500' : sentPct >= 40 ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-gradient-to-r from-red-400 to-red-500',
                   )}
                   style={{ width: `${sentPct}%` }}
                 />
@@ -160,7 +160,7 @@ export default function ConversationDetailPage() {
           {conv.summary && (
             <div className="card p-4">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" />
+                <FileText className="h-3.5 w-3.5 text-[#b51a1a]/70" />
                 Résumé automatique
               </h3>
               <dl className="space-y-2 text-sm">
@@ -175,7 +175,7 @@ export default function ConversationDetailPage() {
                 {conv.summary.ticketReference && (
                   <div>
                     <dt className="text-2xs text-slate-400 uppercase tracking-wide">Référence ticket</dt>
-                    <dd className="font-mono text-navy-600 font-medium">{conv.summary.ticketReference}</dd>
+                    <dd className="font-mono text-[#b51a1a] font-medium">{conv.summary.ticketReference}</dd>
                   </div>
                 )}
                 {conv.summary.actionsEffectuees.length > 0 && (
@@ -199,15 +199,15 @@ export default function ConversationDetailPage() {
           {conv.emailDraft && (
             <div className="card p-4">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" />
+                <Mail className="h-3.5 w-3.5 text-[#b51a1a]/70" />
                 Email auto-généré
               </h3>
               <div className="space-y-2 text-sm">
-                <div className="p-3 bg-surface-raised rounded-lg border border-surface-border">
+                <div className="p-3 bg-white/50 backdrop-blur-sm rounded-lg border border-white/60">
                   <p className="text-2xs text-slate-400 mb-0.5">Objet</p>
                   <p className="text-slate-700 font-medium text-xs">{conv.emailDraft.subject}</p>
                 </div>
-                <div className="p-3 bg-surface-raised rounded-lg border border-surface-border max-h-36 overflow-y-auto">
+                <div className="p-3 bg-white/50 backdrop-blur-sm rounded-lg border border-white/60 max-h-36 overflow-y-auto">
                   <p className="text-2xs text-slate-400 mb-0.5">Corps</p>
                   <p className="text-slate-600 text-xs whitespace-pre-wrap">{conv.emailDraft.body}</p>
                 </div>

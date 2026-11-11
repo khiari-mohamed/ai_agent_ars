@@ -1,18 +1,30 @@
 export type Channel = 'CHAT_WEB' | 'VOIP';
 export type ConversationStatus = 'ACTIVE' | 'RESOLVED' | 'ESCALATED' | 'ABANDONED';
+export type ConnectionState = 'idle' | 'connecting' | 'open' | 'closed';
+export type ReplyLanguage = 'fr' | 'tn' | 'ar-TN';
 export type Language = 'fr' | 'ar-TN';
 export type SentimentLabel = 'SATISFAIT' | 'NEUTRE' | 'INSATISFAIT';
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 export type ConversationResult = 'RESOLU' | 'ESCALADE' | 'ABANDONNE';
+export type ClosedReason = 'RESOLVED' | 'TIMEOUT' | 'ESCALATED' | 'CONNECTION_LOST';
 
 export interface Message {
   id: string;
   conversationId: string;
   role: MessageRole;
   content: string;
+  ttsText?: string;
+  language?: 'fr' | 'tn' | 'ar-TN';
+  ticketId?: string | null;
   timestamp: string; // ISO8601
   tokensUsed: number | null;
   toolName: string | null;
+}
+
+export interface AssistantReplyMessage extends Message {
+  ttsText: string;
+  language: 'fr' | 'tn';
+  ticketId: string | null;
 }
 
 export interface ConversationSummary {

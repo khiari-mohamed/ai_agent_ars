@@ -43,9 +43,7 @@ export default {
           700: '#b45309',
         },
         // Neutral graphite scale — used for dark UI surfaces/structure so the
-        // brand red stays an accent instead of tinting every background (added
-        // for the LoginPage redesign; safe to reuse anywhere else that needs a
-        // true dark neutral rather than the red-tinted "navy" scale).
+        // brand red stays an accent instead of tinting every background.
         ink: {
           50:  '#f6f7f9',
           100: '#eceef1',
@@ -83,12 +81,19 @@ export default {
           'sans-serif',
         ],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-        // Display serif — used sparingly for headlines/wordmarks on
-        // high-stakes screens (login, auth). Not a body/UI face.
         display: ['"Instrument Serif"', 'Georgia', 'serif'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
+      },
+      backgroundImage: {
+        // Ambient mesh backgrounds — sit behind every glass surface so the
+        // blur has something colorful to pick up.
+        'mesh-light':
+          'radial-gradient(at 15% 0%, rgba(214,33,33,0.10) 0px, transparent 50%), radial-gradient(at 85% 8%, rgba(62,126,59,0.07) 0px, transparent 45%), radial-gradient(at 50% 100%, rgba(214,33,33,0.08) 0px, transparent 55%)',
+        'mesh-dark':
+          'radial-gradient(at 15% 10%, rgba(214,33,33,0.16) 0px, transparent 45%), radial-gradient(at 85% 25%, rgba(214,33,33,0.10) 0px, transparent 45%), radial-gradient(at 50% 100%, rgba(255,255,255,0.03) 0px, transparent 55%)',
+        'gradient-primary': 'linear-gradient(135deg, #e5504f 0%, #d62121 45%, #a91717 100%)',
       },
       boxShadow: {
         'card':   '0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08)',
@@ -96,6 +101,13 @@ export default {
         'card-lg':'0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07)',
         'widget': '0 20px 60px -10px rgb(34 6 6 / 0.25)',
         'focus':  '0 0 0 3px rgb(214 33 33 / 0.22)',
+        // Glassmorphism system
+        'glass':      '0 8px 32px -8px rgb(15 18 24 / 0.12), inset 0 1px 0 0 rgb(255 255 255 / 0.4)',
+        'glass-sm':   '0 4px 16px -4px rgb(15 18 24 / 0.10), inset 0 1px 0 0 rgb(255 255 255 / 0.35)',
+        'glass-lg':   '0 24px 64px -12px rgb(15 18 24 / 0.18), inset 0 1px 0 0 rgb(255 255 255 / 0.45)',
+        'glass-dark': '0 20px 60px -12px rgb(0 0 0 / 0.55), inset 0 1px 0 0 rgb(255 255 255 / 0.06)',
+        'glow-red':    '0 8px 24px -4px rgb(214 33 33 / 0.45), 0 0 0 1px rgb(214 33 33 / 0.08)',
+        'glow-red-lg': '0 20px 50px -8px rgb(214 33 33 / 0.55), 0 0 0 1px rgb(214 33 33 / 0.12)',
       },
       animation: {
         'pulse-slow':   'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -105,6 +117,7 @@ export default {
         'fade-in':      'fadeIn 0.2s ease-out',
         'typing-dot':   'typingDot 1.4s infinite ease-in-out',
         'sentiment-bar':'sentimentBar 1s ease-out forwards',
+        'float':        'float 10s ease-in-out infinite',
       },
       keyframes: {
         slideUp: {
@@ -126,6 +139,10 @@ export default {
         sentimentBar: {
           '0%':   { width: '0%' },
           '100%': { width: 'var(--sentiment-width)' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+          '50%':      { transform: 'translate(20px, -30px) scale(1.05)' },
         },
       },
       transitionTimingFunction: {

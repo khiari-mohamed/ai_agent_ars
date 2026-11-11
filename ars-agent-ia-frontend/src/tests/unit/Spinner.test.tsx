@@ -10,7 +10,10 @@ describe('Spinner', () => {
 
   it('applies size classes correctly', () => {
     const { container } = render(<Spinner size="lg" />);
-    expect(container.querySelector('svg')?.className).toContain('h-8');
+    const svg = container.querySelector('svg');
+
+    expect(svg).not.toBeNull();
+    expect(svg).toHaveClass('h-8', 'w-8');
   });
 
   it('has accessible label', () => {

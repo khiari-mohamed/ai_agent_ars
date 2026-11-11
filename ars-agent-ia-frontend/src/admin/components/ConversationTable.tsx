@@ -18,7 +18,7 @@ export default function ConversationTable({ items }: ConversationTableProps) {
     <div className="overflow-x-auto">
       <table className="w-full text-sm" aria-label="Liste des conversations">
         <thead>
-          <tr className="border-b border-surface-border">
+          <tr className="border-b border-white/50">
             {['Canal', 'Assuré', 'Statut', 'Sentiment', 'Durée', 'Date', ''].map((h) => (
               <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                 {h}
@@ -26,18 +26,18 @@ export default function ConversationTable({ items }: ConversationTableProps) {
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-surface-border">
+        <tbody className="divide-y divide-white/40">
           {items.map((conv) => (
             <tr
               key={conv.id}
-              className="hover:bg-surface-raised transition-colors cursor-pointer group"
+              className="group border-l-2 border-l-transparent hover:border-l-[#d62121] hover:bg-white/50 transition-all duration-150 cursor-pointer"
               onClick={() => navigate(`/admin/conversations/${conv.id}`)}
             >
               <td className="px-4 py-3">
                 <span className="flex items-center gap-1.5 text-slate-600">
                   {conv.channel === 'CHAT_WEB'
-                    ? <MessageSquare className="h-3.5 w-3.5 text-navy-400" />
-                    : <Phone className="h-3.5 w-3.5 text-navy-400" />
+                    ? <MessageSquare className="h-3.5 w-3.5 text-[#b51a1a]/60" />
+                    : <Phone className="h-3.5 w-3.5 text-[#b51a1a]/60" />
                   }
                   <span className="text-xs">{channelLabel(conv.channel)}</span>
                 </span>
@@ -61,7 +61,7 @@ export default function ConversationTable({ items }: ConversationTableProps) {
                 {formatRelative(conv.startedAt)}
               </td>
               <td className="px-4 py-3">
-                <ExternalLink className="h-3.5 w-3.5 text-slate-300 group-hover:text-navy-400 transition-colors" />
+                <ExternalLink className="h-3.5 w-3.5 text-slate-300 group-hover:text-[#d62121] transition-colors" />
               </td>
             </tr>
           ))}

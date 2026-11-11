@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.repositories.conversation_repo import ConversationRepository
 from app.db.repositories.ticket_repo import TicketRepository
 from app.db.session import get_db
+from app.core.timezone import TUNIS_TZ_NAME, start_of_tunis_day_utc
 from app.models.schemas.admin import (
     DashboardStatsSchema,
     SentimentDataPointSchema,
@@ -36,7 +37,7 @@ async def dashboard_stats(
         conversations_active=stats["conversations_active"],
         resolution_rate=stats["resolution_rate"],
         escalation_rate=stats["escalation_rate"],
-        avg_response_time_ms=1250.0,  # TODO: compute from messages timestamps
+        avg_response_time_ms=None,
         avg_sentiment_score=stats["avg_sentiment_score"],
         tickets_open_count=open_tickets,
         satisfaction_score=round(((stats["avg_sentiment_score"] + 1) / 2) * 5, 2),
@@ -54,7 +55,7 @@ async def volume_data(
 
     now = datetime.now(timezone.utc)
     if period == "today":
-        since = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        since = start_of_tunis_day_utc(now)
         trunc = "hour"
     elif period == "week":
         since = now - timedelta(days=7)
@@ -65,7 +66,10 @@ async def volume_data(
 
     result = await db.execute(
         select(
-            func.date_trunc(trunc, Conversation.started_at).label("period"),
+            func.date_trunc(
+                trunc,
+                func.timezone(TUNIS_TZ_NAME, Conversation.started_at),
+            ).label("period"),
             func.count().label("total"),
             func.sum(case((Conversation.status == "RESOLVED", 1), else_=0)).label("resolved"),
             func.sum(case((Conversation.status == "ESCALATED", 1), else_=0)).label("escalated"),
@@ -98,7 +102,10 @@ async def sentiment_trend(
     since = datetime.now(timezone.utc) - timedelta(days=days)
     result = await db.execute(
         select(
-            func.date_trunc("day", Conversation.started_at).label("day"),
+            func.date_trunc(
+                "day",
+                func.timezone(TUNIS_TZ_NAME, Conversation.started_at),
+            ).label("day"),
             func.avg(Conversation.sentiment_score).label("avg"),
         )
         .where(Conversation.started_at >= since)

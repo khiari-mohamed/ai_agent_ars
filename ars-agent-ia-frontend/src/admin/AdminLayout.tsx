@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { canAccessRoute } from '@/admin/access';
 import toast from 'react-hot-toast';
 
 interface NavItem {
@@ -28,7 +29,7 @@ const navItems: NavItem[] = [
 const SIDEBAR_COLLAPSE_KEY = 'ars-admin-sidebar-collapsed';
 
 const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950';
 
 export default function AdminLayout() {
   const { user, logout } = useAuthStore();
@@ -69,7 +70,7 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-raised">
+    <div className="flex h-screen overflow-hidden bg-[#f7f4f2] bg-mesh-light">
       {/* Mobile backdrop */}
       <div
         onClick={() => setMobileOpen(false)}
@@ -85,16 +86,21 @@ export default function AdminLayout() {
         id="admin-sidebar"
         aria-label="Barre latérale"
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-60 flex-shrink-0 flex-col bg-ink-950 shadow-2xl transition-all duration-300 ease-spring lg:border-r lg:border-ink-800 lg:shadow-none',
+          'fixed inset-y-0 left-0 z-50 flex w-60 flex-shrink-0 flex-col overflow-hidden',
+          'bg-ink-950/85 backdrop-blur-2xl shadow-glass-dark transition-all duration-300 ease-spring',
+          'lg:border-r lg:border-white/[0.06] lg:shadow-none',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
           'lg:translate-x-0',
           collapsed && 'lg:w-20',
         )}
       >
+        {/* Ambient glow */}
+        <div className="pointer-events-none absolute -top-24 -left-16 h-56 w-56 rounded-full bg-red-500/10 blur-3xl" aria-hidden />
+
         {/* Logo / header */}
-        <div className="flex items-center justify-between gap-2 border-b border-ink-800 px-5 py-5">
+        <div className="relative flex items-center justify-between gap-2 border-b border-white/[0.06] px-5 py-5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <img src="/Image1.png" alt="ARS Tunisie" className="h-8 w-8 flex-shrink-0 object-contain" />
+            <img src="/Image1.png" alt="ARS Tunisie" className="h-8 w-8 flex-shrink-0 object-contain rounded-md bg-white/90 p-1" />
             <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
               <p className="truncate text-sm font-semibold leading-tight text-white">ARS Tunisie</p>
               <p className="truncate text-xs text-ink-400">Agent IA — Admin</p>
@@ -106,7 +112,7 @@ export default function AdminLayout() {
             onClick={() => setMobileOpen(false)}
             aria-label="Fermer le menu"
             className={cn(
-              'flex-shrink-0 rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-white lg:hidden',
+              'flex-shrink-0 rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-white/10 hover:text-white lg:hidden',
               FOCUS_RING,
             )}
           >
@@ -117,9 +123,9 @@ export default function AdminLayout() {
         {/* Nav */}
         <nav
           aria-label="Navigation principale"
-          className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 scrollbar-hidden"
+          className="relative flex-1 space-y-1 overflow-y-auto px-3 py-4 scrollbar-hidden"
         >
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.filter((item) => canAccessRoute(user?.role, item.to)).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -128,11 +134,11 @@ export default function AdminLayout() {
               aria-label={label}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150',
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
                   collapsed && 'lg:justify-center',
                   isActive
-                    ? 'bg-navy-500 text-white'
-                    : 'text-ink-300 hover:bg-navy-600 hover:text-white',
+                    ? 'bg-gradient-to-br from-[#e5504f] via-[#d62121] to-[#a91717] text-white shadow-glow-red'
+                    : 'text-ink-300 hover:bg-white/[0.06] hover:text-white',
                   FOCUS_RING,
                 )
               }
@@ -142,7 +148,7 @@ export default function AdminLayout() {
                   <Icon className="h-4 w-4 flex-shrink-0" />
                   <span className={cn('flex-1 truncate', collapsed && 'lg:hidden')}>{label}</span>
                   {isActive && (
-                    <ChevronRight className={cn('h-3 w-3 opacity-60', collapsed && 'lg:hidden')} />
+                    <ChevronRight className={cn('h-3 w-3 opacity-70', collapsed && 'lg:hidden')} />
                   )}
                 </>
               )}
@@ -151,9 +157,9 @@ export default function AdminLayout() {
         </nav>
 
         {/* User + controls */}
-        <div className="border-t border-ink-800 px-3 py-4">
+        <div className="relative border-t border-white/[0.06] px-3 py-4">
           <div className={cn('mb-2 flex items-center gap-2.5 px-2', collapsed && 'lg:justify-center lg:px-0')}>
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-navy-500">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#e5504f] to-[#a91717] shadow-glow-red">
               <span className="text-sm font-semibold text-white">
                 {user?.prenom?.[0]}{user?.nom?.[0]}
               </span>
@@ -172,7 +178,7 @@ export default function AdminLayout() {
             aria-label={collapsed ? 'Développer le menu' : 'Réduire le menu'}
             title={collapsed ? 'Développer le menu' : 'Réduire le menu'}
             className={cn(
-              'mb-1 hidden w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-ink-800 hover:text-white lg:flex',
+              'mb-1 hidden w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-white/[0.06] hover:text-white lg:flex',
               collapsed && 'lg:justify-center',
               FOCUS_RING,
             )}
@@ -191,7 +197,7 @@ export default function AdminLayout() {
             title={collapsed ? 'Déconnexion' : undefined}
             aria-label="Déconnexion"
             className={cn(
-              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-navy-600 hover:text-white',
+              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-red-500/10 hover:text-red-300',
               collapsed && 'lg:justify-center',
               FOCUS_RING,
             )}
@@ -210,7 +216,7 @@ export default function AdminLayout() {
         )}
       >
         {/* Mobile topbar */}
-        <div className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-ink-800 bg-ink-950 px-4 lg:hidden">
+        <div className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-white/[0.06] bg-ink-950/90 backdrop-blur-xl px-4 lg:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -218,7 +224,7 @@ export default function AdminLayout() {
             aria-expanded={mobileOpen}
             aria-controls="admin-sidebar"
             className={cn(
-              'rounded-lg p-1.5 text-ink-300 transition-colors hover:bg-ink-800 hover:text-white',
+              'rounded-lg p-1.5 text-ink-300 transition-colors hover:bg-white/10 hover:text-white',
               FOCUS_RING,
             )}
           >

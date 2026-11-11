@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel
 
 
@@ -8,7 +11,7 @@ class DashboardStatsSchema(BaseModel):
     conversations_active: int
     resolution_rate: float
     escalation_rate: float
-    avg_response_time_ms: float
+    avg_response_time_ms: float | None = None
     avg_sentiment_score: float
     tickets_open_count: int
     satisfaction_score: float
@@ -27,12 +30,12 @@ class SentimentDataPointSchema(BaseModel):
 
 
 class AuditEventSchema(BaseModel):
-    id: str
-    timestamp: str
+    id: UUID
+    timestamp: datetime
     event_type: str
     actor_type: str
     actor_id: str
-    conversation_id: str | None = None
+    conversation_id: UUID | None = None
     action: str
     resource: str
     result: str

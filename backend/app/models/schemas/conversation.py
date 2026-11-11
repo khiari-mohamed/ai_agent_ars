@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Channel = Literal["CHAT_WEB", "VOIP"]
 ConversationStatus = Literal["ACTIVE", "RESOLVED", "ESCALATED", "ABANDONED"]
@@ -85,24 +85,21 @@ class ConversationListResponse(BaseModel):
 
 # WebSocket event schemas
 class WSIncomingMessage(BaseModel):
-    type: Literal["message", "send_cin", "send_otp", "close"]
+    type: Literal["message", "close"]
     content: str = ""
-    session_id: str
-
-    @field_validator("session_id")
-    @classmethod
-    def session_id_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("session_id cannot be empty")
-        return v.strip()
 
     @field_validator("content")
     @classmethod
     def sanitize_content(cls, v: str) -> str:
-        # Basic sanitization — strip null bytes, limit length
         return v.replace("\x00", "").strip()[:4000]
+
+    @model_validator(mode="after")
+    def message_needs_content(self) -> "WSIncomingMessage":
+        if self.type == "message" and not self.content:
+            raise ValueError("content ne peut pas être vide")
+        return self
 
 
 class WSOutgoingMessage(BaseModel):
-    type: Literal["message", "typing", "sentiment", "auth_result", "error", "conversation_closed"]
+    type: Literal["session", "message", "typing", "sentiment", "error", "conversation_closed"]
     data: dict[str, Any]

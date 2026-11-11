@@ -1,0 +1,25 @@
+export const STRINGS = {
+  genericError: 'Une erreur est survenue. Veuillez réessayer.',
+  connectionLost: 'La connexion a été interrompue. Démarrez une nouvelle conversation pour continuer.',
+  noSpeech: "Je n'ai rien entendu. Appuyez sur le micro et réessayez.",
+  replyTimeout: "L'assistant met trop de temps à répondre. Veuillez réessayer.",
+  messageTooLong: 'Votre message est trop long (4000 caractères maximum).',
+  voiceUnavailable: "Le mode vocal n'est pas disponible pour le moment.",
+  voiceSendFailed: "L'envoi de l'audio a échoué. Veuillez réessayer.",
+  ttsUnavailable: 'La réponse vocale est indisponible. Le texte reste affiché.',
+  audioPlaybackFailed: 'Impossible de lire la réponse vocale.',
+  audioUnsupported: 'Format audio non pris en charge par ce navigateur.',
+  switchModeConfirm: 'Changer de mode démarre une nouvelle conversation. Continuer ?',
+  closed: {
+    RESOLVED: 'Conversation terminée',
+    ESCALATED: 'Transféré à un conseiller',
+    TIMEOUT: 'Conversation expirée (inactivité)',
+    CONNECTION_LOST: 'Connexion interrompue',
+  },
+  recorder: {
+    unsupported: "L'enregistrement audio n'est pas pris en charge par ce navigateur.",
+    denied: "Accès au microphone refusé. Autorisez-le dans les réglages du navigateur.",
+    unavailable: 'Aucun microphone détecté.',
+    failed: "L'enregistrement a échoué. Veuillez réessayer.",
+  },
+} as const;

@@ -1,158 +1,88 @@
-import { useState } from 'react';
-import { Save, Sliders, AlertTriangle, Clock, MessageSquare } from 'lucide-react';
+import { Check, Lock, Minus, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
-import Spinner from '@/shared/components/Spinner';
-import toast from 'react-hot-toast';
+import type { UserRole } from '@/types/admin';
 
-interface EscalationSettings {
-  sentimentThreshold: number;
-  maxAuthAttempts: number;
-  maxConversationDurationMin: number;
-  maxUnresolvedTurns: number;
-  inactivityTimeoutMin: number;
-}
+const LIMITS: ReadonlyArray<{ label: string; value: string; note: string }> = [
+  { label: 'Durée de session admin', value: '30 minutes', note: 'Le jeton expire, reconnexion requise (pas de renouvellement).' },
+  { label: 'Message texte (chat)', value: '1 000 caractères (défaut)', note: 'Valeur configurable côté serveur (maximum autorisé : 4 000).' },
+  { label: 'Énoncé vocal', value: '3 Mo', note: 'Taille maximale d’un enregistrement.' },
+  { label: 'Cadence vocale', value: '12 tours / minute', note: 'Au-delà, les tours sont refusés.' },
+  { label: 'Inactivité vocale', value: '120 secondes', note: 'La session vocale est fermée.' },
+];
 
-const DEFAULTS: EscalationSettings = {
-  sentimentThreshold: -0.6,
-  maxAuthAttempts: 3,
-  maxConversationDurationMin: 15,
-  maxUnresolvedTurns: 3,
-  inactivityTimeoutMin: 5,
-};
+const ROLES: ReadonlyArray<UserRole> = ['AGENT', 'SUPERVISEUR', 'ADMIN'];
+const ROLE_LABELS: Record<UserRole, string> = { AGENT: 'Agent', SUPERVISEUR: 'Superviseur', ADMIN: 'Admin' };
+
+const PERMISSIONS: ReadonlyArray<{ label: string; roles: ReadonlyArray<UserRole> }> = [
+  { label: 'Tableau de bord, conversations, envoi d’email', roles: ['AGENT', 'SUPERVISEUR', 'ADMIN'] },
+  { label: 'Tickets (consulter, changer statut et assignation)', roles: ['AGENT', 'SUPERVISEUR', 'ADMIN'] },
+  { label: 'Base de savoirs : consulter et tester la recherche', roles: ['AGENT', 'SUPERVISEUR', 'ADMIN'] },
+  { label: 'Base de savoirs : ajouter une entrée', roles: ['SUPERVISEUR', 'ADMIN'] },
+  { label: 'Journaux d’audit', roles: ['SUPERVISEUR', 'ADMIN'] },
+  { label: 'Base de savoirs : supprimer une entrée', roles: ['ADMIN'] },
+  { label: 'Créer, désactiver ou réactiver un utilisateur', roles: ['ADMIN'] },
+];
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<EscalationSettings>(DEFAULTS);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    setSaved(false);
-    // In production: PATCH /api/admin/settings
-    await new Promise((r) => setTimeout(r, 800));
-    setSaving(false);
-    setSaved(true);
-    toast.success('Paramètres enregistrés');
-    setTimeout(() => setSaved(false), 3000);
-  };
-
-  const update = <K extends keyof EscalationSettings>(key: K, val: EscalationSettings[K]) =>
-    setSettings((s) => ({ ...s, [key]: val }));
-
   return (
-    <div className="w-full p-6 space-y-6">
-      <PageHeader title="Paramètres système" subtitle="Configuration des règles métier de l'agent IA" />
+    <div className="p-6 space-y-6 w-full">
+      <PageHeader title="Paramètres" subtitle="Limites techniques et droits d’accès — lecture seule" />
 
-      {/* Escalation rules */}
-      <div className="card p-5 space-y-5">
-        <div className="flex items-center gap-2 pb-3 border-b border-surface-border">
-          <AlertTriangle className="h-4 w-4 text-amber-500" />
-          <h2 className="text-sm font-semibold text-slate-700">Règles d'escalade</h2>
-        </div>
+      <p className="flex items-start gap-2 rounded-xl border border-surface-border bg-white/50 px-4 py-3 text-sm text-slate-600">
+        <Lock className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden />
+        Ces valeurs sont définies par la configuration du serveur. Elles ne sont pas modifiables depuis cette interface.
+      </p>
 
-        <div className="grid gap-5">
-          {/* Sentiment */}
-          <div>
-            <label className="label-base flex items-center justify-between">
-              <span>Seuil de sentiment (escalade automatique)</span>
-              <span className="font-mono text-navy-600">{settings.sentimentThreshold}</span>
-            </label>
-            <input
-              type="range"
-              min="-1" max="0" step="0.05"
-              value={settings.sentimentThreshold}
-              onChange={(e) => update('sentimentThreshold', parseFloat(e.target.value))}
-              className="w-full accent-navy-600 mt-2"
-              aria-label="Seuil de sentiment"
-            />
-            <div className="flex justify-between text-xs text-slate-400 mt-1">
-              <span>-1 (très négatif)</span>
-              <span>0 (neutre)</span>
+      <section className="card p-5" aria-labelledby="limits-title">
+        <h2 id="limits-title" className="mb-4 flex items-center gap-2 border-b border-surface-border pb-3 text-sm font-semibold text-slate-700">
+          <SlidersHorizontal className="h-4 w-4 text-amber-500" aria-hidden />
+          Limites techniques
+        </h2>
+        <dl className="divide-y divide-surface-border">
+          {LIMITS.map((item) => (
+            <div key={item.label} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
+              <div>
+                <dt className="text-sm font-medium text-slate-700">{item.label}</dt>
+                <dd className="text-xs text-slate-500">{item.note}</dd>
+              </div>
+              <dd className="font-mono text-sm text-navy-600">{item.value}</dd>
             </div>
-            <p className="text-xs text-slate-500 mt-1.5">
-              L'agent escalade si le score descend en dessous de ce seuil après 2 messages.
-            </p>
-          </div>
+          ))}
+        </dl>
+      </section>
 
-          {/* Auth attempts */}
-          <div>
-            <label className="label-base">Tentatives d'authentification max.</label>
-            <div className="flex gap-2 items-center mt-1">
-              {[2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => update('maxAuthAttempts', n)}
-                  className={`h-8 w-8 rounded-lg text-sm font-medium border transition-colors ${
-                    settings.maxAuthAttempts === n
-                      ? 'bg-[#d62121] text-white border-[#d62121]'
-                      : 'bg-white text-slate-600 border-surface-border hover:border-navy-300'
-                  }`}
-                >
-                  {n}
-                </button>
+      <section className="card overflow-hidden" aria-labelledby="roles-title">
+        <h2 id="roles-title" className="flex items-center gap-2 border-b border-surface-border px-5 py-4 text-sm font-semibold text-slate-700">
+          <ShieldCheck className="h-4 w-4 text-sage-500" aria-hidden />
+          Rôles et permissions
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" aria-label="Permissions par rôle">
+            <thead>
+              <tr className="border-b border-surface-border">
+                <th scope="col" className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Action</th>
+                {ROLES.map((r) => (
+                  <th key={r} scope="col" className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">{ROLE_LABELS[r]}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-border">
+              {PERMISSIONS.map((p) => (
+                <tr key={p.label}>
+                  <th scope="row" className="px-5 py-3 text-left font-normal text-slate-700">{p.label}</th>
+                  {ROLES.map((r) => (
+                    <td key={r} className="px-4 py-3 text-center">
+                      {p.roles.includes(r)
+                        ? <Check className="mx-auto h-4 w-4 text-sage-500" aria-label="Autorisé" />
+                        : <Minus className="mx-auto h-4 w-4 text-slate-300" aria-label="Non autorisé" />}
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </div>
-          </div>
-
-          {/* Duration */}
-          <div>
-            <label className="label-base flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-slate-400" />
-              Durée max. de conversation (minutes)
-            </label>
-            <input
-              type="number"
-              min={5} max={60}
-              value={settings.maxConversationDurationMin}
-              onChange={(e) => update('maxConversationDurationMin', parseInt(e.target.value))}
-              className="input-base w-24 mt-1"
-            />
-          </div>
-
-          {/* Unresolved turns */}
-          <div>
-            <label className="label-base flex items-center gap-1.5">
-              <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
-              Tours sans résolution avant escalade
-            </label>
-            <input
-              type="number"
-              min={1} max={10}
-              value={settings.maxUnresolvedTurns}
-              onChange={(e) => update('maxUnresolvedTurns', parseInt(e.target.value))}
-              className="input-base w-24 mt-1"
-            />
-          </div>
-
-          {/* Inactivity */}
-          <div>
-            <label className="label-base flex items-center gap-1.5">
-              <Sliders className="h-3.5 w-3.5 text-slate-400" />
-              Timeout d'inactivité (minutes)
-            </label>
-            <input
-              type="number"
-              min={1} max={30}
-              value={settings.inactivityTimeoutMin}
-              onChange={(e) => update('inactivityTimeoutMin', parseInt(e.target.value))}
-              className="input-base w-24 mt-1"
-            />
-          </div>
+            </tbody>
+          </table>
         </div>
-      </div>
-
-      {/* Save */}
-      <div className="flex items-center justify-end gap-3">
-        <span className="text-xs text-slate-500" aria-live="polite">
-          {saved ? 'Modifications enregistrées' : ''}
-        </span>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving
-            ? <Spinner size="sm" className="text-white" />
-            : <><Save className="h-4 w-4" /> Enregistrer les modifications</>
-          }
-        </button>
-      </div>
+      </section>
     </div>
   );
 }

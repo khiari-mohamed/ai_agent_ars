@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import redis.asyncio as aioredis
 
 from app.core.config import settings
+from app.core.exceptions import RateLimitError
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -60,6 +63,25 @@ async def delete_session(session_id: str) -> None:
 async def extend_session_ttl(session_id: str) -> None:
     r = await get_redis()
     await r.expire(f"session:{session_id}", settings.REDIS_SESSION_TTL_SECONDS)
+
+
+@asynccontextmanager
+async def session_lock(
+    session_id: str, timeout: int = 90, wait: float = 10.0
+) -> AsyncIterator[None]:
+    """Serialises turns of one session. Raises RateLimitError if the previous
+    turn is still running after `wait` seconds."""
+    r = await get_redis()
+    lock = r.lock(f"lock:session:{session_id}", timeout=timeout, blocking_timeout=wait)
+    if not await lock.acquire():
+        raise RateLimitError()
+    try:
+        yield
+    finally:
+        try:
+            await lock.release()
+        except Exception as exc:  # lock expired mid-turn
+            logger.warning("session_lock_release_failed", error=str(exc))
 
 
 # ── OTP store ────────────────────────────────────────────────────────────────

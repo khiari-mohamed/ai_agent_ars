@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.logging import get_logger
-from app.services.llm_service import extract_text_from_response, llm_chat
+from app.services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
 
@@ -47,15 +47,12 @@ async def generate_summary_and_email(
 
     # Build transcript
     transcript = "\n".join(
-        f"[{m['role'].upper()}]: {m['content']}"
-        for m in session.get("messages", [])
-        if m["role"] in ("user", "assistant")
+        f"[{m['role'].upper()}]: {m['content']}" for m in session.get("transcript", [])
     )
 
-    assure = session.get("assure", {})
     context = f"""
 Conversation ID: {conversation_id}
-Assuré: {assure.get('prenom', '')} {assure.get('nom', '')} (CIN: {assure.get('cin', '')})
+Assuré: déclaré dans la conversation (non vérifié)
 Canal: {session.get('channel', 'CHAT_WEB')}
 Résultat: {result}
 Ticket créé: {session.get('ticket_id', 'Non')}
@@ -65,12 +62,13 @@ TRANSCRIPT:
 """
 
     try:
-        llm_result = await llm_chat(
-            messages=[{"role": "user", "content": context}],
+        llm_result = await get_llm_service().complete(
+            [{"role": "user", "content": context}],
+            system=SUMMARY_PROMPT,
             temperature=0.2,
-            tools=False,
+            max_tokens=1500,
         )
-        raw = extract_text_from_response(llm_result)
+        raw = llm_result.text
 
         # Extract JSON
         match = re.search(r'\{.*\}', raw, re.DOTALL)
@@ -92,7 +90,9 @@ TRANSCRIPT:
             try:
                 await repo.close(
                     conv_id=uuid.UUID(conversation_id),
-                    status="ESCALATED" if result == "ESCALADE" else "RESOLVED",
+                    status={"ESCALADE": "ESCALATED", "ABANDONNE": "ABANDONED"}.get(
+                        result, "RESOLVED"
+                    ),
                     escalation_reason=session.get("escalation_reason"),
                     summary=summary,
                     email_draft=email,

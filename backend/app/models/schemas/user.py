@@ -22,6 +22,13 @@ class UserSchema(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserCreatedSchema(UserSchema):
+    """Returned once, at creation: the TOTP secret is not readable afterwards."""
+
+    totp_secret: str
+    totp_uri: str
+
+
 class UserCreateSchema(BaseModel):
     nom: str = Field(min_length=1, max_length=100)
     prenom: str = Field(min_length=1, max_length=100)
